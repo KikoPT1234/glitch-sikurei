@@ -1,106 +1,124 @@
-const Discord = require("discord.js");
-const fs = require("fs");
-const bot = new Discord.Client({disableEveryone: true});
-require("dotenv").config();
-const express = require('express');
-const app = express();
-app.get("/", (request, response) => {
-response.sendStatus(200);
+// Express
+const express = require('express')
+const app = express()
+app.listen(process.env.PORT)
+app.get('/', (request, response) => { 
+  return response.send("<h1>HELLO</h1>"); 
 });
-app.listen(process.env.PORT);
 
-bot.commands = new Discord.Collection()
-bot.aliases = new Discord.Collection()
-fs.readdir("./commands/", (err, files) => {
-  if (err) console.log(err);
-  // Log commands
-  let jsfile = files.filter(f => f.split(".").pop() === "js")
-  if (jsfile.length <= 0) {
-    console.log("There are no commands to load...");
-    return;
-  }
-  jsfile.forEach((f, i) => {
-    let props = require(`./commands/${f}`);
-    console.log(`${f} loaded!`);
-    bot.commands.set(props.help.name, props);
-    if(props.help.aliases)props.help.aliases.forEach(alias => {
-      bot.aliases.set(alias, props.help.name);
-    });
-  });
+
+// Package setup
+const u = require('./utils.js')
+const fs = require('fs')
+const Discord = require('discord.js')
+const client = new Discord.Client()
+
+// Command handler
+client.commands = new Discord.Collection()
+client.aliases = new Discord.Collection()
+fs.readdir('./commands', (err, files) => {
+  if (!files) return console.log('There are no files to load...')
+  const jsfiles = files.filter(f => f.split('.').pop() === 'js')
+  jsfiles.forEach((file, index) => {
+    const props = require(`./commands/${file}`)
+    console.log(`${file} loaded!`)
+    client.commands.set(props.help.name, props)
+    if (props.help.aliases) props.help.aliases.forEach(alias => {
+      client.aliases.set(alias, props.help.name)
+    })
+  })
 })
 
-bot.on("ready", async () => {
-  console.log(`${bot.user.username} is online!`);
-  bot.user.setActivity("The Discord Server", {
-    type: 'WATCHING' 
-  });
-});
+// Defining the prefix
+client.prefix = '!'
 
-let prefix = "!";
-bot.prefix = "!";
-
-bot.on("message", async message => {
+// Message event
+client.on('message', async msg => {
+  if (msg.author.bot) return;
+  if (msg.channel.type === 'dm') return;
   
-  let messageArray = message.content.split(" ");
-  let args = message.content.slice(bot.prefix.length).trim().split(' ');
-  let cmd = args.shift().toLowerCase();  
-  if (message.author.bot && cmd !== "say") return;
-  if(message.channel.type === "dm") return;
-  if(message.channel === message.guild.channels.find(c=>c.name==="suggestions") && !message.content.startsWith(prefix)){
-    message.delete(500);
-    return message.channel.send("Please make your suggestion using !suggest (suggestion)").then(msg=>msg.delete(5000));
-  } else if(message.channel === message.guild.channels.find(c=>c.name==="unban-me") && !message.content.startsWith(prefix)){
-    message.delete(500);
-    return message.channel.send("Please make your request using !appeal").then(msg=>msg.delete(5000));
-  } else if(!message.content.startsWith(prefix)) return;
-  let command;
-  if (bot.commands.has(cmd)) {
-    command = bot.commands.get(cmd);
-    command.run(bot, message, args);
-  } else if (bot.aliases.has(cmd)) {
-    command = bot.commands.get(bot.aliases.get(cmd));
-    command.run(bot, message, args);
+  // Suggestion function
+  if (msg.channel.name === 'suggestions' && !(msg.member.hasPermission('ADMINISTRATOR'))) {
+    msg.delete(500)
+    if (msg.content.startsWith(client.prefix)) return msg.channel.send('Please do not use commands in this channel.').then(message => message.delete(10000))
+    if (msg.content.length < 10) return msg.channel.send('Your suggestion must be at least 10 words long!').then(message => message.delete(10000))
+    const embed = new Discord.RichEmbed()
+    .setAuthor(msg.guild.name, msg.guild.iconURL)
+    .setTitle('**Suggestion**')
+    .setColor('RANDOM')
+    .addField('Suggestor', `**${msg.author.tag}** with ID ${msg.author.id}`)
+    .addField('Time', msg.createdAt)
+    .addField('Suggestion', msg.content)
+    .setFooter(msg.client.user.username, msg.client.user.displayAvatarURL)
+    .setTimestamp()
+    const channel = msg.guild.channels.find(c => c.name === 'control-room')
+    msg.channel.send('Your suggestion has been sent. Thanks!').then(message => message.delete(10000))
+    return channel.send(embed)
   }
-});
-
-bot.on("guildMemberRemove", async member => {
-  let messageTyp = Math.floor(Math.random() * 10) + 1;
-  let lChannel = member.guild.channels.find(`name`, "join-leave");
-  console.log(messageTyp);
-  let gPerson = member.user.username;
-  const message = messageType => {
-    if(messageType === 1) {
-      lChannel.send(`Goodbye **${gPerson}**, we will miss you!`);
-    } else if(messageType === 2) {
-      lChannel.send(`A wild **${gPerson}** has disappeared.`);
-    } else if(messageType === 3) {
-      lChannel.send(`Swoooosh. **${gPerson}** just took off.`);
-    } else if(messageType === 4) {
-      lChannel.send(`**${gPerson}** just left... Or did they?`);
-    } else if(messageType === 5) {
-      lChannel.send(`**${gPerson}** just left the server - glhf!`);
-    } else if(messageType === 6) {
-      lChannel.send(`Goodbye **${gPerson}**, we were expecting you to stay ( ͡° ͜ʖ ͡°)`);
-    } else if(messageType === 7) {
-      lChannel.send(`Roses are red, violets are blue, **${gPerson}** just left this server without you`);
-    } else if(messageType === 8) {
-      lChannel.send(`Brace yourselves. **${gPerson}** just abandoned the server.`);
-    } else if(messageType === 9) {
-      lChannel.send(`**${gPerson}** just left. Everyone, mess about while you can!`);
-    } else {
-      lChannel.send(`**${gPerson}** just slid out of the server.`);
-    }
+  
+  if (!msg.content.startsWith(client.prefix)) return;
+  
+  // Command Runner
+  const args = msg.content.slice(client.prefix.length).trim().split(' ')
+  const cmd = args.shift().toLowerCase()
+  let command
+  if (client.commands.has(cmd)) {
+    msg.delete(500).then(message => {
+      command = client.commands.get(cmd)
+      command.run(client, message, args)
+    })
+  } else if (client.aliases.has(cmd)) {
+    msg.delete(500).then(message => {
+      command = client.commands.get(client.aliases.get(cmd))
+      command.run(client, message, args)
+    })
   }
-  message(messageTyp);
-});
-
-bot.on("guildCreate", guild => {
-  bot.channels.get("548632669051813910").send(`Joined 
-**${guild.name}** with **${guild.memberCount}** members.`);
-});
-
-bot.on('voiceStateUpdate', async (oldMember, newMember) => {
- if (newMember.guild.me.voiceChannel.members.size < 2) newMember.guild.me.voiceChannel.leave();
 })
 
-bot.login(process.env.SECRET);
+// Guild Member Add event
+client.on('guildMemberAdd', async member => {
+  member.addRole(member.guild.roles.find(r => r.name === 'Player'))
+  member.guild.channels.find(c => c.name === 'welcome').send(`Welcome ${member} to the server! Please read the message sent above.`).then(msg => msg.delete(30000))
+})
+
+// Guild Member Remove event
+client.on('guildMemberRemove', async (member) => {
+  const message = Math.floor(Math.random() * 10) + 1
+  try {
+    var lChannel = member.guild.channels.find(c => c.name === 'join-leave')
+    if (!lChannel) lChannel = member.guild.channels.find(c => c.name === 'general')
+  } catch(e) {
+    console.log(e)
+  }
+  const gPerson = member.user.username
+  if(message === 1) {
+    lChannel.send(`Goodbye **${gPerson}**, we will miss you!`);
+  } else if(message === 2) {
+    lChannel.send(`A wild **${gPerson}** has disappeared.`);
+  } else if(message === 3) {
+    lChannel.send(`Swoooosh. **${gPerson}** just took off.`);
+  } else if(message === 4) {
+    lChannel.send(`**${gPerson}** just left... Or did they?`);
+  } else if(message === 5) {
+    lChannel.send(`**${gPerson}** just left the server - glhf!`);
+  } else if(message === 6) {
+    lChannel.send(`Goodbye **${gPerson}**, we were expecting you to stay ( ͡° ͜ʖ ͡°)`);
+  } else if(message === 7) {
+   lChannel.send(`Roses are red, violets are blue, **${gPerson}** just left this server without you`); 
+  } else if(message === 8) {
+   lChannel.send(`Brace yourselves. **${gPerson}** just abandoned the server.`); 
+  } else if(message === 9) {
+   lChannel.send(`**${gPerson}** just left. Everyone, mess about while you can!`); 
+  } else {
+   lChannel.send(`**${gPerson}** just slid out of the server.`); 
+  }
+})
+
+// Ready Event
+client.on('ready', async () => {
+  console.log(client.user.username + ' is ready!')
+  client.user.setActivity('the Discord Server', {type: 'WATCHING'})
+})
+
+// Login
+client.login(process.env.TOKEN).catch(e => console.log(e))

@@ -1,32 +1,50 @@
-const Discord = require("discord.js");
-module.exports.run = async (bot, message, args) => {
-  let kUser = message.mentions.members.first() || message.guild.members.get(args[0]);
-  if(!kUser) return message.channel.send("Can't find user!");
-  let kReason = args.slice(1).join(" ")||"No reason provided";
-  if(!message.member.hasPermission("KICK_MEMBERS")) return message.channel.send("Lolno... You don't have the sweet kick permissions!");
-  if(kUser.hasPermission("KICK_MEMBERS")) return message.channel.send("REKT! The user can't be kicked! How sad!");
-  let kickEmbed = new Discord.RichEmbed()
-  .setTitle("**Kick**")
-  .setColor("ff00e1")
-  .addField("Kicked User", `${kUser.username} with ID ${kUser.id}`)
-  .addField("Kicked By", `<@${message.author.id}> with ID ${message.author.id}`)
-  .addField("Kicked In", message.channel)
-  .addField("Time", message.createdAt.toLocaleString())
-  .addField("Reason", kReason);
+const Discord = require('discord.js')
+const {getUserMember, createEmbed} = require('../utils.js')
 
-  let kickChannel = message.guild.channels.find(c=>c.name==="control-room");
-  if(!kickChannel) return message.channel.send("Can't find control-room channel.");
-
-  try{
-    await kUser.kick(kReason);
-    kickChannel.send(kickEmbed);
-  }catch(e){
-    message.channel.send(`:x: **| Member ${kUser.user} couldn't be kicked. Reason: ${e.message}**`).then(m=>m.delete(5000).catch(e=>{}))
+module.exports.run = async (client, msg, args) => {
+  if (!msg.member.hasPermission(module.exports.help.permission)) return msg.channel.send('You don\'t have permission to do that.')
+  if (!args[0]) return msg.channel.send(`Usage: ${module.exports.help.usage}`)
+  const reason = args.slice(1).join(' ') || 'No reason provided'
+  const {user, member} = await getUserMember(client, msg, args)
+  if (!user) return;
+  if (!member) return;
+  const options = {
+    title: 'Kick',
+    fields: [{
+      title: 'Kicked User',
+      value: `**${user.tag}** with ID ${user.id}`
+    }, {
+      title: 'Kicked By',
+      value: `**${msg.author.tag}** with ID ${msg.author.id}`
+    }, {
+      title: 'Kicked In',
+      value: msg.channel
+    }, {
+      title: 'Kicked At',
+      value: msg.createdAt
+    }, {
+      title: 'Reason',
+      value: reason
+    }]
   }
-  return;
+  const embed = await createEmbed(msg, options)
+  const controlChannel = msg.guild.channels.find(c => c.name === 'control-room')
+  member.kick(reason).then(() => {
+    if (!controlChannel) msg.channel.send(':x: Failed to get control-room.')
+    else controlChannel.send(embed).catch(e => {
+      console.log(e)
+      msg.channel.send(`:x: Failed to notify control-room: **${e}**`)
+    })
+    msg.channel.send(`:white_check_mark: Successfully kicked user **${user.tag}**`)
+  }).catch(e => {
+    console.log(e)
+    return msg.channel.send(`:x: Failed to kick user: **${e}**`)
+  })
 }
+
 module.exports.help = {
-  name: "kick",
-  aliases: ["ku"],
-  description: "Kick a member"
+  name: 'kick',
+  description: 'Kick a user',
+  permission: 'KICK_MEMBERS',
+  usage: '!kick (member mention or user ID) [reason]'
 }

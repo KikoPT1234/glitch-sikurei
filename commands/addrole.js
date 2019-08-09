@@ -1,37 +1,57 @@
-const Discord = require("discord.js");
-module.exports.run = async (bot, message, args) => {
-  let User = message.mentions.members.first() || message.guild.members.get(args[0]);
-  let role = message.guild.roles.find(r => r.name === args.slice(1).join(" "));
-  if(!message.member.hasPermission("MANAGE_ROLES")) return message.channel.send("I don't see the permissions...");
-  if(!User) return message.channel.send("User not found");
-  if(!role) return message.channel.send("The role doesn't exist!");
-  let botrole = message.guild.me.highestRole;
-  if(role.position < botrole.position){
-    let arEmbed = new Discord.RichEmbed()
-    .setTitle("**Role Add**")
-    .setColor("3aff28")
-    .addField("Added User", `${User} with ID ${User.id}`)
-    .addField("Added By", `${message.author} with ID ${message.author.id}`)
-    .addField("Role Added", `${role} with ID ${role.id}`)
-    .addField("Time", message.createdAt.toLocaleString());
+const Discord = require('discord.js')
+const {getUserMember, createEmbed} = require('../utils.js')
 
-  if(!User.roles.has(role.id)) {
-    User.addRole(role.id).then(() => {
-      message.delete();
-      User.send(`You have been added to the role ${role} in ${message.guild.name}`).catch(e => message.channel.send(`Could not notify user for the following reason: ${e}`).then(msg => msg.delete(5000)));
-
-      let Channel = message.guild.channels.find(c=>c.name==="control-room");
-      if(!Channel) return message.channel.send("Can't find control-room channel.");
-
-      Channel.send(arEmbed);
-    })
-  } else {
-    return message.channel.send("The user already has that role!");
+module.exports.run = async (client, msg, args) => {
+  if (!msg.member.hasPermission(module.exports.help.permission)) return msg.channel.send('You don\'t have permission to do that.')
+  if (!(args[0]) || !(args[1])) return msg.channel.send(`Usage: ${module.exports.help.usage}`)
+  const {user, member} = await getUserMember(client, msg, args)
+  if (!user) return;
+  if (!member) return;
+  const role = msg.guild.roles.find(r => r.name.toLowerCase() === args.slice(1).join(' ').toLowerCase()) || msg.guild.roles.get(args.slice(1).join(' '))
+  if (!role) return msg.channel.send(':x: Failed to find role.')
+  const options = {
+    title: 'Role Add',
+    color: '06f702',
+    fields: [{
+      title: 'Added User',
+      value: `**${user.tag}** with ID ${user.id}`
+    }, {
+      title: 'Added By',
+      value: `**${msg.author.tag}** with ID ${msg.author.id}`
+    }, {
+      title: 'Added Role',
+      value: `**${role.name}** with ID ${role.id}`
+    }, {
+      title: 'Added In',
+      value: msg.channel
+    }, {
+      title: 'Added At',
+      value: msg.createdAt
+    }]
   }
-} else return message.channel.send("I don't have permission to add this role!")
+  const embed = await createEmbed(msg, options)
+  const controlChannel = msg.guild.channels.find(c => c.name === 'control-room')
+  member.addRole(role.id)
+  .then(() => {
+    if (!controlChannel) msg.channel.send(':x: Failed to get control-room')
+    else controlChannel.send(embed)
+    user.send(`You have been given the role **${role.name}** in **${msg.guild.name}**`)
+    .catch(e => {
+      console.log(e)
+      msg.channel.send(`:x: Failed to notify user: **${e}**`)
+    })
+    msg.channel.send(`:white_check_mark: Successfully added role to **${user.tag}**`)
+  })
+  .catch(e => {
+    console.log(e)
+    msg.channel.send(`:x: Failed to add the role: **${e}**`)
+  })
 }
+
 module.exports.help = {
-  name: "addrole",
-  aliases: ["ar"], //CANNOT BE THE SAME FOR 2 COMMANDS
-  description: "Add a role to a member"
+  name: 'addrole',
+  aliases: ['ar'],
+  description: 'Add a role to a user',
+  usage: '!addrole (member mention or user ID) (role name or ID)',
+  permission: 'MANAGE_ROLES'
 }
