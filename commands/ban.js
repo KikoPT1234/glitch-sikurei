@@ -1,32 +1,49 @@
-const Discord = require("discord.js");
-module.exports.run = async (bot, message, args) => {
-  let bUser = message.mentions.members.first() || await bot.fetchUser(args[0]);
-  if(!bUser) return message.channel.send("Can't find user!");
-  let bReason = args.slice(1).join(" ")||"No reason provided";
-  if(!message.member.hasPermission("BAN_MEMBERS")) return message.channel.send("Lolno... You don't have the sweet ban permissions!");
-  if(bUser.hasPermission("BAN_MEMBERS")) return message.channel.send("REKT! The user can't be banned! How sad!");
-  let banEmbed = new Discord.RichEmbed()
-  .setTitle("**Ban**")
-  .setColor("424242")
-  .addField("Banned User", `${bUser.username} with ID ${bUser.id}`)
-  .addField("Banned By", `<@${message.author.id}> with ID ${message.author.id}`)
-  .addField("Banned In", message.channel)
-  .addField("Time", message.createdAt.toLocaleString())
-  .addField("Reason", bReason);
+const Discord = require('discord.js')
+const {getUserMember, createEmbed} = require('../utils.js')
 
-  let banChannel = message.guild.channels.find(c=>c.name==="control-room");
-  if(!banChannel) return message.channel.send("Can't find control-room channel.");
-
-  try{
-    await bUser.ban(bReason);
-    banChannel.send(banEmbed);
-  }catch(e){
-    message.channel.send(`:x: **| Member ${bUser.user} couldn't be banned. Reason: ${e.message}**`).then(m=>m.delete(5000).catch(e=>{}))
+module.exports.run = async (client, msg, args) => {
+  if (!msg.member.hasPermission(module.exports.help.permission)) return msg.channel.send('You don\'t have permission to do that.')
+  if (!args[0]) return msg.channel.send(`Usage: ${module.exports.help.usage}`)
+  const reason = args.slice(1).join(' ') || 'No reason provided'
+  const {user, member} = await getUserMember(client, msg, args)
+  if (!user) return;
+  if (!member) return;
+  const options = {
+    title: 'Ban',
+    fields: [{
+      title: 'Banned User',
+      value: `**${user.tag}** with ID ${user.id}`
+    }, {
+      title: 'Banned By',
+      value: `**${msg.author.tag}** with ID ${msg.author.id}`
+    }, {
+      title: 'Banned In',
+      value: msg.channel
+    }, {
+      title: 'Banned At',
+      value: msg.createdAt
+    }, {
+      title: 'Reason',
+      value: reason
+    }]
   }
-  return;
+  const embed = await createEmbed(msg, options)
+  const controlChannel = msg.guild.channels.find(c => c.name === 'control-room')
+  member.ban(reason).then(() => {
+    if (!controlChannel) msg.channel.send(':x: Failed to get control-room.')
+    else controlChannel.send(embed).catch(e => {
+      console.log(e)
+      msg.channel.send(`:x: Failed to notify control room: **${e}**`)
+    })
+    msg.channel.send(`:white_check_mark: Successfully banned user **${user.tag}**`)
+  }).catch(e => {
+    console.log(e)
+    return msg.channel.send(`:x: Failed to ban user: **${e}**`)
+  })
 }
 module.exports.help = {
-  name: "ban",
-  aliases: ["bu" ], //CANNOT BE THE SAME FOR 2 COMMANDS
-  description: "Ban a user"
+  name: 'ban',
+  description: 'Ban a user',
+  permission: 'BAN_MEMBERS',
+  usage: '!ban (member mention or user ID) [reason]'
 }
